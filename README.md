@@ -88,3 +88,7 @@ Para navegador sem consumir cota: defina SKIP_LIVE_LLM=1; as respostas LLM serã
 A API ainda não possui autenticação e as portas ficam restritas ao localhost. Publicação externa exige configuração própria. Fontes recuperadas não garantem correção de todas as afirmações da LLM. Cache não guarda respostas da LLM. Dependências externas, cota e disponibilidade do Gemini podem variar. Há avisos de depreciação de dependências nos testes.
 
 Alterações desta etapa foram feitas somente na pasta local; nenhum push foi realizado.
+
+## Documentos iniciais em outra instalação
+
+A API inclui automaticamente os dois exemplos publicados em `documentos/uploads_iniciais.json` na mesma coleção das 21 fontes oficiais. Os IDs originais são preservados. A inclusão acontece na inicialização, inclusive com a sincronização web desativada, e repetições preservam os documentos existentes. As 21 fontes oficiais são coletadas em segundo plano. Após a coleta completa, a base inicial tem 23 documentos. Os dois exemplos são `documento.txt` e `validacao-front.txt`, usados para demonstração e validação.

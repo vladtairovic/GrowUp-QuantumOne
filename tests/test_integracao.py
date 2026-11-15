@@ -235,3 +235,13 @@ def test_colecao_compartilhada_tem_configuracao_unica(monkeypatch):
         assert chamadas[0]["configuration"] == {"hnsw": {"space": "l2"}}
     finally:
         banco.obter_colecao.cache_clear()
+
+
+def test_uploads_iniciais_instalacao_vazia_e_repeticao(contexto):
+    _, colecao = contexto
+    documentos.carregar_uploads_iniciais(colecao)
+    assert colecao.count() == 2
+    assert {m[1]["filename"] for m in colecao.registros.values()} == {"documento.txt", "validacao-front.txt"}
+    anterior = deepcopy(colecao.registros)
+    documentos.carregar_uploads_iniciais(colecao)
+    assert colecao.registros == anterior

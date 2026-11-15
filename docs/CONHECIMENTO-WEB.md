@@ -121,7 +121,7 @@ Referências do provedor:
 O volume chroma_data mantém o índice; api_data mantém
 /app/data/conhecimento, com snapshots e status. Não execute down -v.
 Um backup lógico anterior à ampliação foi salvo em
-artifacts/backup-preconhecimento.json (ignorado pelo Git) e no volume api_data.
+artifacts/backup-preconhecimento.json (publicado no repositório) e no volume api_data.
 Ele inclui os 156 registros originais desta instância, metadados e embeddings.
 
 Para exportar os snapshots atuais sem segredos:
@@ -161,3 +161,7 @@ Até haver cota disponível, a busca web real e a geração de respostas não po
 ser certificadas como funcionais nesta conta. Não substituímos a resposta por
 dados fabricados. Resultados finais da coleta e execução estão em
 docs/VALIDACAO-CONHECIMENTO.md.
+
+## Inclusão dos uploads na base inicial
+
+Os exemplos `documento.txt` e `validacao-front.txt` estão em `documentos/uploads_iniciais.json`, incluído na imagem Docker. Na inicialização, a API insere os IDs ausentes na coleção existente. A operação usa os embeddings configurados e preserva registros já existentes. Assim, uma instalação nova recebe os dois exemplos antes da coleta das 21 fontes oficiais, formando uma base inicial de 23 documentos após a coleta. Os snapshots da coleta web continuam correspondendo às fontes oficiais.

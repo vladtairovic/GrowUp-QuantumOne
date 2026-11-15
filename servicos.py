@@ -37,7 +37,8 @@ class ServicosIntegrados:
         while True:
             try:
                 obter_cliente().heartbeat()
-                obter_colecao()
+                colecao = obter_colecao()
+                documentos.carregar_uploads_iniciais(colecao)
                 return
             except ColecaoIncompativel:
                 raise

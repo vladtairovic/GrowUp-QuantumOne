@@ -52,3 +52,16 @@ def listar_documentos():
             break
         offset += 256
     return sorted(documentos.values(), key=lambda d: (d["filename"], d["id"]))
+
+
+def carregar_uploads_iniciais(colecao):
+    """Inclui os exemplos publicados quando seus IDs ainda não existem na coleção."""
+    import json
+    from pathlib import Path
+    arquivo = Path(__file__).resolve().parents[1] / "documentos/uploads_iniciais.json"
+    chunks = json.loads(arquivo.read_text(encoding="utf-8"))
+    grupos = validar_lote(chunks, MODELO_EMBEDDINGS)
+    for document_id, trechos in grupos.items():
+        existentes = colecao.get(where={"document_id": document_id})
+        if not existentes["ids"]:
+            atualizar_documento(colecao, document_id, trechos)
