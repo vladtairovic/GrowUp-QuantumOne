@@ -32,6 +32,14 @@ A primeira inicialização coleta e indexa em segundo plano. Depois, verifica
 atualizações a cada sete dias, enquanto a API estiver ligada. Falhas ficam
 registradas no status; uma coleta pode ser repetida manualmente.
 
+Falhas HTTP 429, 500, 502, 503 e 504 e falhas de transporte têm até três
+tentativas por URL, com esperas de 2 e 4 segundos. Se persistirem, a fonte
+fica com erro e a sincronização termina como `partial`, preservando os dados
+anteriores. Outros erros HTTP, como 404, não são repetidos.
+
+Validação em 16/11/2026: 21 fontes oficiais sincronizadas sem erros e dois
+uploads preservados, totalizando 23 documentos e 5.073 trechos no Chroma.
+
 A coleção e os embeddings existentes são reutilizados. Os três documentos
 originais mantêm seus IDs; os uploads são preservados. Um documento sem mudanças
 não é reindexado. Cada fonte guarda URL, título, seções, versão e data.

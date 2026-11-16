@@ -22,23 +22,42 @@ def validar_url(url):
 
 def baixar(cliente, url, com_url=False):
     validar_url(url)
-    # Redirecionamentos também passam pela lista permitida, antes de qualquer conexão.
     for _ in range(4):
-        with cliente.stream("GET", url) as r:
-            if r.is_redirect:
-                from urllib.parse import urljoin
-                url = validar_url(urljoin(url, r.headers["location"]))
-                continue
-            r.raise_for_status()
-            if not any(t in r.headers.get("content-type", "") for t in ("text/html", "text/plain")):
-                raise ValueError("Formato de página não aceito.")
-            dados = bytearray()
-            for parte in r.iter_bytes():
-                dados.extend(parte)
-                if len(dados) > MAX_BYTES:
-                    raise ValueError("Página acima de 8 MiB.")
-            return (dados.decode("utf-8"), url) if com_url else dados.decode("utf-8")
+        texto, destino = _baixar_com_tentativas(cliente, url)
+        if texto is not None:
+            return (texto, url) if com_url else texto
+        url = validar_url(destino)
     raise ValueError("Redirecionamentos excessivos.")
+
+
+def _baixar_com_tentativas(cliente, url):
+    """Repete falhas transitórias até três vezes, com espera exponencial."""
+    for tentativa in range(3):
+        try:
+            return _baixar(cliente, url)
+        except httpx.HTTPStatusError as erro:
+            if erro.response.status_code not in (429, 500, 502, 503, 504) or tentativa == 2:
+                raise
+        except httpx.TransportError:
+            if tentativa == 2:
+                raise
+        time.sleep(2 ** (tentativa + 1))
+
+
+def _baixar(cliente, url):
+    with cliente.stream("GET", url) as r:
+        if r.is_redirect:
+            from urllib.parse import urljoin
+            return None, urljoin(url, r.headers["location"])
+        r.raise_for_status()
+        if not any(t in r.headers.get("content-type", "") for t in ("text/html", "text/plain")):
+            raise ValueError("Formato de página não aceito.")
+        dados = bytearray()
+        for parte in r.iter_bytes():
+            dados.extend(parte)
+            if len(dados) > MAX_BYTES:
+                raise ValueError("Página acima de 8 MiB.")
+        return dados.decode("utf-8"), url
 
 
 def extrair(html):

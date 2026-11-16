@@ -100,3 +100,5 @@ Consulte [o contrato, limites configuráveis, subconjunto Python seguro e valida
 Os padrões são 2.500 linhas, 32 qubits, 10.000 operações, profundidade 10.000, 512 KiB de código e 60 segundos por otimização. Ajuste as variáveis de `.env.example` no seu `.env` e execute `docker compose up --build -d --wait` para aplicar a configuração. Python aceita um subconjunto de construção de circuitos interpretado por AST. A saída otimizada é OpenQASM 2 quando representável.
 
 A validação da Beta-v1.1 registrou 157 testes Python aprovados, quatro testes de frontend e 28 verificações HTTP no Docker. Os casos incluíram circuitos de 2.000 linhas e cargas de 5.000 operações em ambos os formatos. O teste optativo de RAG ao vivo ficou fora dessa execução.
+
+Atualização da Beta-v1.1 em 16/11/2026: o coletor repete falhas HTTP transitórias e de transporte em até três tentativas. A suíte Python passou com 162 testes e um teste optativo ignorado. A sincronização real terminou com `status: ok`, mantendo as 21 fontes IBM e os dois uploads (23 documentos e 5.073 trechos).
