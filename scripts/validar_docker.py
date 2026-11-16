@@ -113,17 +113,37 @@ def main():
     assert set(config["services"]) == {"api", "chroma", "frontend", "cache"}
     assert not config["services"]["chroma"].get("ports")
     assert config["networks"]["banco"]["internal"] is True
-    # Não reutilizar silenciosamente um volume de validação já preenchido.
-    # Em reexecuções locais, preserve-o e escolha conscientemente outro ambiente.
+    
+    # A API carrega documentos iniciais automaticamente.
+    # Preservar volumes que contenham dados de testes anteriores.
     executar(COMPOSE + ["up", "-d", "--wait", "--wait-timeout", "900"], timeout=1000)
     health, _ = conferir("GET", "/health", 200)
     assert health == {"status": "ok", "mode": "integrated"}
+
     inicial = estado_banco()
     assert inicial["colecoes"] == 1
-    assert inicial["chunks"] == 0, "O volume de validação já contém dados; preserve-o."
-    vazio, _ = conferir("POST", "/search", 200, {"query": "transpilação"})
-    assert vazio["status"] == "insufficient_context" and vazio["chunks"] == []
-    registrar("containers_iniciados_base_vazia", colecoes=inicial["colecoes"])
+
+    uploads_iniciais = json.loads(
+        (ROOT / "documentos" / "uploads_iniciais.json").read_text(encoding="utf-8")
+    )
+
+    ids_iniciais = sorted(chunk["id"] for chunk in uploads_iniciais)
+
+    documentos_iniciais = sorted({
+        chunk["metadados"]["document_id"] for chunk in uploads_iniciais
+    })
+
+    assert inicial["ids"] == ids_iniciais, (
+        "O volume de validação contém dados além dos exemplos iniciais; preserve-o."
+    )
+    assert inicial["documentos"] == documentos_iniciais
+
+    registrar(
+        "containers_iniciados_com_uploads_iniciais",
+        colecoes=inicial["colecoes"],
+        chunks=inicial["chunks"]
+    )
+
 
     indice = executar(COMPOSE + [
         "exec", "-T", "api", "python", "-m", "rag.indexar_documentos",
@@ -131,8 +151,12 @@ def main():
     ])
     primeiro = estado_banco()
     fontes = json.loads((ROOT / "documentos" / "base_documental.json").read_text(encoding="utf-8"))
-    assert primeiro["documentos"] == sorted(d["document_id"] for d in fontes)
-    assert primeiro["chunks"] > 3 and primeiro["dimensao"] == 384
+    
+    assert primeiro["documentos"] == sorted(
+        set(documentos_iniciais) | {d["document_id"] for d in fontes}
+    )
+    assert primeiro["chunks"] > inicial["chunks"] and primeiro["dimensao"] == 384
+
     assert len(primeiro["ids"]) == len(set(primeiro["ids"]))
     assert primeiro["colecoes"] == 1
     registrar("snapshot_indexado", documentos=len(primeiro["documentos"]),
@@ -148,7 +172,13 @@ def main():
     assert busca["status"] == "ok" and busca["mode"] == "integrated"
     assert busca["chunks"] and all(c["content"].strip() for c in busca["chunks"])
     assert any("transpil" in c["content"].lower() for c in busca["chunks"])
-    assert set(busca["citations"]).issubset({d["fonte"] for d in fontes})
+    
+    fontes_permitidas = (
+        {d["fonte"] for d in fontes}
+        | {chunk["metadados"]["fonte"] for chunk in uploads_iniciais}
+    )
+    assert set(busca["citations"]).issubset(fontes_permitidas)
+
     assert {k.lower(): v for k, v in headers.items()}["x-request-id"] == busca["request_id"]
     registrar("busca_semantica_real", segundos=round(time.perf_counter() - inicio, 3),
               fontes=busca["citations"])

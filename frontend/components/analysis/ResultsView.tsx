@@ -1,112 +1,120 @@
-
 "use client";
-import {useState} from "react";
-import type {AnalysisResponse} from "../../services/analysis-api";
-import SourceDrawer, {type SourceDetails} from "./SourceDrawer";
 
-type ResultsViewProps = {
-  result: AnalysisResponse;
-  code: string;
-  question: string;
-  onBack: () => void;
-};
+import { useState } from "react";
+import Markdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import SourceDrawer, { type SourceDetails } from "./SourceDrawer";
+import type { AnalysisResponse, CodeFormat } from "../../services/analysis-api";
 
-export default function ResultsView({
-  result,
-  code,
-  question,
-  onBack,
-}: ResultsViewProps) {
- const [selected,setSelected]=useState<SourceDetails|null>(null);
- const [notice,setNotice]=useState("");
- async function copy(){try{await navigator.clipboard.writeText(result.quantum?.circuito_otimizado_qasm||result.answer);setNotice("Resultado copiado.");}catch{setNotice("Selecione o texto e use Ctrl+C.");}}
+export function suggestedCode(result: AnalysisResponse, format: CodeFormat) {
+  if (result.quantum) return result.quantum.circuito_otimizado_qasm;
+  const blocks = Array.from(
+    result.answer.matchAll(
+      /^```(python|py|qasm|openqasm)[^\S\n]*\r?\n([\s\S]*?)^```[^\S\n]*$/gim,
+    ),
+  );
+  if (blocks.length !== 1) return "";
+  const [, language, code] = blocks[0];
+  return /^(python|py)$/i.test(language) === (format === "python")
+    ? code.trimEnd()
+    : "";
+}
+
+export default function ChatReply({ result }: { result: AnalysisResponse }) {
+  const [source, select] = useState<SourceDetails | null>(null);
+  const [notice, setNotice] = useState("");
+  const q = result.quantum;
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(
+        q?.circuito_otimizado_qasm || result.answer,
+      );
+      setNotice("Resultado copiado.");
+    } catch {
+      setNotice("Selecione o texto e use Ctrl+C.");
+    }
+  }
   return (
-    <>
-      <header className="topbar">
-        <div className="topbar-inner">
-          <div className="brand">
-            <div className="brand-symbol">Q</div>
-
-            <div className="brand-copy">
-              <strong>Agente RAG</strong>
-              <span>Otimização de código</span>
-            </div>
-          </div>
-
-          <div className="topbar-label">
-            Qiskit · Next-Gen Computing
-          </div>
-        </div>
-      </header>
-
-      <main className="workspace">
-        <section className="page-intro">
-          <span className="eyebrow">
-            ANÁLISE DE CÓDIGO
-          </span>
-
-          <h1>Resultados da análise</h1>
-
-          <div className="result-header-actions">
+    <div className="chat-reply">
+      <Markdown remarkPlugins={[remarkGfm]}>{result.answer}</Markdown>
+      {q && (
+        <details open>
+          <summary>Métricas Qiskit e circuito otimizado</summary>
+          <p>
+            Profundidade: {q.original.profundidade} → {q.proposta.profundidade}
+            <br />
+            Operações: {q.original.total_operacoes} →{" "}
+            {q.proposta.total_operacoes}
+          </p>
+          <p>
+            Equivalência:{" "}
+            {q.equivalente === null
+              ? "não verificada"
+              : q.equivalente
+                ? "confirmada"
+                : "não equivalente"}
+            . {q.motivo}
+          </p>
+          <pre>
+            <code>{q.circuito_otimizado_qasm}</code>
+          </pre>
+        </details>
+      )}
+      {result.warnings.map((w, i) => (
+        <p key={i}>{w}</p>
+      ))}
+      {result.web_status && (
+        <small>
+          Busca web:{" "}
+          {result.web_status === "used"
+            ? "utilizada"
+            : result.web_status === "disabled"
+              ? "desativada"
+              : "sem resultados"}
+        </small>
+      )}
+      {result.search_suggestions_html && (
+        <iframe
+          title="Sugestões de pesquisa"
+          sandbox="allow-popups allow-popups-to-escape-sandbox"
+          referrerPolicy="no-referrer"
+          srcDoc={
+            "<meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'; style-src 'unsafe-inline'; img-src https: data:; base-uri 'none'; form-action 'none'\">" +
+            result.search_suggestions_html
+          }
+        />
+      )}
+      {!!result.sources.length && (
+        <details>
+          <summary>Ver fontes ({result.sources.length})</summary>
+          {result.sources.map((f, i) => (
             <button
+              key={i}
+              className="source-item-button"
               type="button"
-              className="button-secondary"
-              onClick={onBack}
+              onClick={() =>
+                select({
+                  id: f.chunk_id,
+                  title: f.title || f.source,
+                  origin: f.origin === "web" ? "Web" : "Base local",
+                  category: "Documentação",
+                  type: "documentation",
+                  excerpt: f.content,
+                  relationship: "Trecho recuperado para esta resposta.",
+                  url: /^https?:\/\//.test(f.source) ? f.source : null,
+                })
+              }
             >
-              Voltar ao editor
+              {i + 1}. {f.title || f.source}
             </button>
-          </div>
-        </section>
-
-        <section className="panel result-section" aria-label="Resultado">
-          <h2>Resultado</h2>
-          {result.web_status&&<p>Busca web: {result.web_status==="used"?"fontes encontradas":result.web_status==="disabled"?"desativada":"sem fontes web retornadas"}</p>}
-          {result.search_suggestions_html&&<iframe
-            title="Sugestões de pesquisa do Google"
-            sandbox="allow-popups allow-popups-to-escape-sandbox"
-            referrerPolicy="no-referrer"
-            style={{width:"100%",height:180,border:0}}
-            srcDoc={'<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; style-src \'unsafe-inline\'; img-src https: data:; base-uri \'none\'; form-action \'none\'">'+result.search_suggestions_html}
-          />}
-          {result.warnings.map((w,i)=><p role="status" key={i}>{w}</p>)}
-          <p style={{whiteSpace:"pre-wrap"}}>{result.answer}</p>
-          {result.quantum&&<><h3>Métricas Qiskit</h3><div className="metrics-grid"><div className="metric-card"><span>Profundidade antes</span><strong>{result.quantum.original.profundidade}</strong></div><div className="metric-card"><span>Profundidade depois</span><strong>{result.quantum.proposta.profundidade}</strong></div></div><p>Operações: {result.quantum.original.total_operacoes} → {result.quantum.proposta.total_operacoes}</p><p>Equivalência: {result.quantum.equivalente===true?"confirmada":result.quantum.equivalente===false?"não equivalente":"não verificada"}. {result.quantum.motivo}</p><h3>Circuito otimizado</h3><pre className="comparison-code">{result.quantum.circuito_otimizado_qasm}</pre></>}
-          {result.sources.length>0&&<><h3>Fontes recuperadas</h3>{result.sources.map((f,i)=><button key={f.chunk_id} className="source-item source-item-button" onClick={()=>setSelected({id:f.chunk_id,title:f.title||f.source,origin:(f.origin==="web"?"Web":"Base local")+(f.retrieved_at?" · "+f.retrieved_at:""),category:f.origin==="web"?"Pesquisa web":"Documentação",type:"documentation",excerpt:f.content,relationship:f.origin==="web"?"Afirmações da resposta vinculadas a esta fonte pelo Google; não são transcrições literais da página.":"Contexto recuperado para esta análise; citações não verificadas automaticamente.",url:/^https?:\/\//.test(f.source)?f.source:null})}>Ver fonte {i+1} ({f.origin==="web"?"web":"local"}): {f.title||f.source}</button>)}</>}
-          <button className="button-secondary" onClick={copy}>Copiar resultado</button><p role="status">{notice}</p>
-          <p>Solicitação: {result.request_id}</p>
-        </section>
-
-        <section className="panel result-section">
-          <div className="result-section-heading">
-            <h2>Dados enviados</h2>
-          </div>
-
-          <div className="question-context">
-            <span>Pergunta</span>
-            <strong>
-              {question.trim() || "Nenhuma pergunta informada."}
-            </strong>
-          </div>
-
-          <div className="comparison-panel">
-            <div className="comparison-panel-heading">
-              CÓDIGO OPENQASM 2
-            </div>
-
-            <pre className="comparison-code">
-              <code>
-                {code.trim() || "Nenhum código informado."}
-              </code>
-            </pre>
-          </div>
-        </section>
-
-        <footer className="page-footer">
-          Agente RAG · Qiskit — Ferramenta de apoio ao
-          desenvolvimento quântico.
-        </footer>
-      </main>
-      <SourceDrawer source={selected} onClose={()=>setSelected(null)}/>
-    </>
+          ))}
+        </details>
+      )}
+      <button type="button" className="button-quiet" onClick={copy}>
+        Copiar resultado
+      </button>
+      <small role="status">{notice}</small>
+      <SourceDrawer source={source} onClose={() => select(null)} />
+    </div>
   );
 }

@@ -20,7 +20,7 @@ export default function SettingsPanel({
   onBackendChange,
   onTopKChange,
 }: SettingsPanelProps) {
-  const [isExpanded, setIsExpanded] = useState(true);
+  const [isExpanded, setIsExpanded] = useState(false);
 
   return (
     <section className="settings-panel">

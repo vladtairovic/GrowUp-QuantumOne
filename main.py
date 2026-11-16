@@ -78,7 +78,8 @@ async def erro_http(request, exc):
                  422:'Arquivo vazio, binário ou fora da codificação UTF-8.'}
     if request.url.path == '/qiskit/optimize':
         mensagens[422] = 'OpenQASM 2 inválido ou circuito acima dos limites permitidos.'
-    return erro(request,exc.status_code,'HTTP_ERROR',mensagens.get(exc.status_code,'Falha na requisição.'))
+    return erro(request,exc.status_code,'HTTP_ERROR',exc.detail if request.url.path.startswith('/conversations') and isinstance(exc.detail, str)
+                 else mensagens.get(exc.status_code,'Falha na requisição.'))
 
 @app.exception_handler(FalhaServico)
 async def servico_indisponivel(request, exc):
@@ -182,3 +183,54 @@ async def avaliar(entrada: Avaliacao):
 
 from quantum.api import router as quantum_router
 app.include_router(quantum_router)
+
+
+# Sessões usadas pelo chat web e pelo futuro cliente CLI.
+from uuid import UUID
+from rag import conversas
+
+
+class MensagemConversa(Consulta):
+    message_id: UUID
+
+
+@app.post("/conversations", status_code=201)
+async def criar_conversa():
+    return {"conversation_id": conversas.criar()}
+
+
+@app.get("/conversations/{conversation_id}")
+async def obter_conversa(conversation_id: UUID):
+    _, mensagens = conversas.ler(str(conversation_id))
+    return {"conversation_id": conversation_id, "messages": mensagens}
+
+
+@app.post("/conversations/{conversation_id}/messages")
+async def enviar_mensagem(
+    conversation_id: UUID, entrada: MensagemConversa, request: Request
+):
+    identificador = str(conversation_id)
+    versao, mensagens = conversas.ler(identificador)
+    # Uma repetição após perda de conexão devolve a resposta já persistida.
+    for indice, mensagem in enumerate(mensagens):
+        if mensagem.get("id") == str(entrada.message_id):
+            if mensagem["content"] != entrada.input:
+                raise HTTPException(409, "Identificador de mensagem já utilizado.")
+            return mensagens[indice + 1]["result"]
+
+    pergunta = conversas.preparar(mensagens, entrada.input)
+    resultado = ResultadoConsulta.model_validate(await chamar(
+        servicos.consultar(pergunta, entrada.top_k, entrada.web_search)
+    ))
+    resposta = {
+        **resultado.model_dump(mode="json"),
+        "conversation_id": identificador,
+        "request_id": request.state.request_id,
+        "mode": servicos.mode,
+    }
+    atualizadas = mensagens + [
+        {"id": str(entrada.message_id), "role": "user", "content": entrada.input},
+        {"role": "assistant", "content": resultado.response, "result": resposta},
+    ]
+    conversas.registrar(identificador, versao, atualizadas)
+    return resposta

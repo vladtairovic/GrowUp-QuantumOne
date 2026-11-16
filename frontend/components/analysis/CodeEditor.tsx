@@ -5,6 +5,8 @@ import CodeMirror from "@uiw/react-codemirror";
 import { StreamLanguage } from "@codemirror/language";
 
 type CodeEditorProps = {
+  readOnly?: boolean;
+  qasm: boolean;
   value: string;
   onChange: (value: string) => void;
 };
@@ -109,14 +111,17 @@ const qasmLanguage = StreamLanguage.define({
 });
 
 export default function CodeEditor({
+  readOnly,
+  qasm,
   value,
   onChange,
 }: CodeEditorProps) {
   return (
     <CodeMirror
+      readOnly={readOnly}
       value={value}
       height="320px"
-      extensions={[qasmLanguage]}
+      extensions={qasm ? [qasmLanguage] : []}
       onChange={onChange}
       basicSetup={{
         lineNumbers: true,
