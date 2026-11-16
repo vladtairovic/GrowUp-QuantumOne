@@ -2,6 +2,7 @@
 import asyncio
 import json
 import os
+import logging
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -11,6 +12,8 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException
 from pydantic import ValidationError
+from quantum.errors import CircuitError
+from quantum.http import CircuitBodyLimit, error_response
 from contratos import (Consulta, Busca, ResultadoConsulta, ResultadoBusca, Documento,
     RespostaConsulta, RespostaBusca, RespostaDocumento, ListaDocumentos, Saude,
     Avaliacao, RespostaAvaliacao, Erro)
@@ -57,7 +60,11 @@ async def identificar_chamada(request: Request, call_next):
     esperado = 'multipart/form-data' if request.url.path == '/documents' else 'application/json'
     recebido = request.headers.get('content-type', '').split(';')[0].strip().lower()
     if request.method == 'POST' and recebido != esperado:
-        resposta = erro(request,415,'CONTENT_TYPE',f'Use Content-Type: {esperado}.')
+        if request.url.path == '/qiskit/optimize':
+            resposta = error_response(request.state.request_id,
+                CircuitError('CONTENT_TYPE', f'Use Content-Type: {esperado}.', {'stage': 'transport'}, 415))
+        else:
+            resposta = erro(request,415,'CONTENT_TYPE',f'Use Content-Type: {esperado}.')
     else:
         try:
             resposta = await call_next(request)
@@ -69,7 +76,21 @@ async def identificar_chamada(request: Request, call_next):
 @app.exception_handler(RequestValidationError)
 async def entrada_invalida(request, exc):
     fields = ['.'.join(map(str,e['loc'])) for e in exc.errors()]
+    if request.url.path == '/qiskit/optimize':
+        malformed = any(e['type'] == 'json_invalid' for e in exc.errors())
+        failure = CircuitError('INVALID_JSON' if malformed else 'INVALID_REQUEST',
+            'JSON malformado.' if malformed else 'Confira os campos e tipos da requisição.',
+            {'stage': 'request', 'fields': fields,
+             'issues': [{'field': '.'.join(map(str, e['loc'])), 'reason': e['msg'], 'type': e['type']} for e in exc.errors()]},
+            400 if malformed else 422)
+        logging.getLogger(__name__).warning('qiskit request_id=%s stage=request code=%s fields=%s', request.state.request_id, failure.code, fields)
+        return error_response(request.state.request_id, failure, fields)
     return erro(request,422,'INVALID_INPUT','Confira os campos, tipos e limites.',fields)
+
+@app.exception_handler(CircuitError)
+async def circuito_invalido(request, exc):
+    logging.getLogger(__name__).warning('qiskit request_id=%s stage=domain code=%s', request.state.request_id, exc.code)
+    return error_response(request.state.request_id, exc)
 
 @app.exception_handler(HTTPException)
 async def erro_http(request, exc):
@@ -77,7 +98,8 @@ async def erro_http(request, exc):
                  413:'Arquivo maior que 256 KiB.',415:'Use arquivo .txt, .md, .py ou .qasm em UTF-8.',
                  422:'Arquivo vazio, binário ou fora da codificação UTF-8.'}
     if request.url.path == '/qiskit/optimize':
-        mensagens[422] = 'OpenQASM 2 inválido ou circuito acima dos limites permitidos.'
+        return error_response(request.state.request_id,
+            CircuitError('INVALID_REQUEST', 'Requisição inválida.', {'stage': 'request'}, exc.status_code))
     return erro(request,exc.status_code,'HTTP_ERROR',exc.detail if request.url.path.startswith('/conversations') and isinstance(exc.detail, str)
                  else mensagens.get(exc.status_code,'Falha na requisição.'))
 
@@ -183,6 +205,7 @@ async def avaliar(entrada: Avaliacao):
 
 from quantum.api import router as quantum_router
 app.include_router(quantum_router)
+app.add_middleware(CircuitBodyLimit)
 
 
 # Sessões usadas pelo chat web e pelo futuro cliente CLI.

@@ -45,10 +45,6 @@ export default function SourceDrawer({
     };
   }, [source, onClose]);
 
-  useEffect(() => {
-    setCopyMessage("");
-  }, [source]);
-
   if (!source) {
     return null;
   }

@@ -1,5 +1,7 @@
 # GrowUp — frontend, API, ChromaDB e cache
 
+A versão **Beta-v1.1** amplia a análise e otimização de circuitos OpenQASM 2 e Python/Qiskit. O processamento determinístico usa Qiskit e pode ser executado apenas com o código no editor.
+
 Frontend atualizado para a branch develop de julia-deeck/agente-rag-otimizacao-codigo-front, commit cf592cb1df9c3df04e0b3755e544ff2ae1ed9935. CSS, logo, editor OpenQASM, formulário e estrutura das telas vêm dessa versão. Os placeholders de serviço desconectado foram substituídos por integração real. Detalhes: [Migração develop](docs/FRONTEND-DEVELOP.md).
 
 ## Iniciar e abrir
@@ -47,12 +49,12 @@ flowchart LR
 
 ## Usar a interface
 
-Preencha o código OpenQASM 2, a pergunta, ou ambos e clique em Analisar.
-- Código: validação, transpilação em nível 3, métricas e equivalência reais do Qiskit.
+Preencha o código OpenQASM 2 ou Python/Qiskit, a pergunta, ou ambos e clique em Analisar.
+- Código: validação, transpilação em nível 3 e métricas de operações e profundidade. A equivalência matricial é verificada quando o circuito cabe no orçamento de verificação.
 - Pergunta: RAG + Gemini com o top_k selecionado em Configurações.
 - Ambos: Qiskit e explicação documental. Se somente a explicação falhar, as métricas são preservadas e a falha é indicada.
 - Resultados: fontes com painel de detalhes, circuito otimizado, copiar resultado e voltar ao editor.
-- Processamento: voltar aborta a espera do navegador; o backend pode terminar a operação já iniciada.
+- Processamento: o serviço encerra o worker ao atingir o prazo ou detectar que a conexão foi fechada.
 - Erros: entrada inválida, evidência insuficiente ou serviço indisponível, com retry e entrada preservada.
 
 A escolha Backend de referência não representa hardware IBM. Somente o destino local está disponível, como na branch de origem.
@@ -87,8 +89,14 @@ Para navegador sem consumir cota: defina SKIP_LIVE_LLM=1; as respostas LLM serã
 
 A API ainda não possui autenticação e as portas ficam restritas ao localhost. Publicação externa exige configuração própria. Fontes recuperadas não garantem correção de todas as afirmações da LLM. Cache não guarda respostas da LLM. Dependências externas, cota e disponibilidade do Gemini podem variar. Há avisos de depreciação de dependências nos testes.
 
-Alterações desta etapa foram feitas somente na pasta local; nenhum push foi realizado.
-
 ## Documentos iniciais em outra instalação
 
 A API inclui automaticamente os dois exemplos publicados em `documentos/uploads_iniciais.json` na mesma coleção das 21 fontes oficiais. Os IDs originais são preservados. A inclusão acontece na inicialização, inclusive com a sincronização web desativada, e repetições preservam os documentos existentes. As 21 fontes oficiais são coletadas em segundo plano. Após a coleta completa, a base inicial tem 23 documentos. Os dois exemplos são `documento.txt` e `validacao-front.txt`, usados para demonstração e validação.
+
+## Circuitos grandes e otimização determinística
+
+Consulte [o contrato, limites configuráveis, subconjunto Python seguro e validação Docker](docs/circuitos-grandes.md). O endpoint mantém a entrada `qasm` e também aceita `code`/`format`; limites efetivos em `GET /qiskit/limits`.
+
+Os padrões são 2.500 linhas, 32 qubits, 10.000 operações, profundidade 10.000, 512 KiB de código e 60 segundos por otimização. Ajuste as variáveis de `.env.example` no seu `.env` e execute `docker compose up --build -d --wait` para aplicar a configuração. Python aceita um subconjunto de construção de circuitos interpretado por AST. A saída otimizada é OpenQASM 2 quando representável.
+
+A validação da Beta-v1.1 registrou 157 testes Python aprovados, quatro testes de frontend e 28 verificações HTTP no Docker. Os casos incluíram circuitos de 2.000 linhas e cargas de 5.000 operações em ambos os formatos. O teste optativo de RAG ao vivo ficou fora dessa execução.

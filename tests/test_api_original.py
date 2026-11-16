@@ -106,6 +106,6 @@ def test_erro_interno(client,monkeypatch):
 def test_openapi(client):
     schema=client.get('/openapi.json').json();validate(schema)
     assert schema['openapi']=='3.1.0'
-    assert set(schema['paths'])=={'/health','/query','/search','/documents','/evaluate','/qiskit/optimize',
+    assert set(schema['paths'])=={'/health','/query','/search','/documents','/evaluate','/qiskit/optimize','/qiskit/limits',
         '/conversations','/conversations/{conversation_id}','/conversations/{conversation_id}/messages'}
     assert json.loads(Path('openapi.json').read_text())==schema

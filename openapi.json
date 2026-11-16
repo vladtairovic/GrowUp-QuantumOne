@@ -758,29 +758,16 @@
         }
       }
     },
-    "/qiskit/optimize": {
-      "post": {
-        "summary": "Otimizar",
-        "description": "Transpila OpenQASM 2 e verifica equivalência quando possível; sem LLM.",
-        "operationId": "otimizar_qiskit_optimize_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Circuito"
-              }
-            }
-          },
-          "required": true
-        },
+    "/qiskit/limits": {
+      "get": {
+        "summary": "Limites",
+        "operationId": "limites_qiskit_limits_get",
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ResultadoQiskit"
-                }
+                "schema": {}
               }
             }
           },
@@ -880,6 +867,155 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Erro"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/qiskit/optimize": {
+      "post": {
+        "summary": "Otimizar",
+        "description": "Analisa QASM2 ou Python restrito e transpila sem depender de LLM.",
+        "operationId": "otimizar_qiskit_optimize_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Circuito"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultadoQiskit"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroCircuito"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Rota inexistente",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Erro"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Método incorreto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Erro"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Request Entity Too Large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroCircuito"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Unsupported Media Type",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroCircuito"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroCircuito"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroCircuito"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Bad Gateway",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroCircuito"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroCircuito"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "Gateway Timeout",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroCircuito"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroCircuito"
+                }
+              }
+            }
+          },
+          "499": {
+            "description": "Additional Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErroCircuito"
                 }
               }
             }
@@ -1363,10 +1499,38 @@
       "Circuito": {
         "properties": {
           "qasm": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Qasm",
+            "description": "Entrada OpenQASM 2 legada; exclusiva com code."
+          },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code",
+            "description": "Código QASM2 ou Python/Qiskit restrito."
+          },
+          "format": {
             "type": "string",
-            "maxLength": 10000,
-            "minLength": 1,
-            "title": "Qasm"
+            "enum": [
+              "auto",
+              "qasm",
+              "python"
+            ],
+            "title": "Format",
+            "default": "auto"
           },
           "optimization_level": {
             "type": "integer",
@@ -1378,9 +1542,6 @@
         },
         "additionalProperties": false,
         "type": "object",
-        "required": [
-          "qasm"
-        ],
         "title": "Circuito"
       },
       "Consulta": {
@@ -1417,6 +1578,31 @@
           "input"
         ],
         "title": "Consulta"
+      },
+      "DetalheErroCircuito": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "details": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Details"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "code",
+          "message",
+          "details"
+        ],
+        "title": "DetalheErroCircuito"
       },
       "Documento": {
         "properties": {
@@ -1468,6 +1654,42 @@
           "message"
         ],
         "title": "Erro"
+      },
+      "ErroCircuito": {
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Request Id"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "fields": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Fields"
+          },
+          "error": {
+            "$ref": "#/components/schemas/DetalheErroCircuito"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "request_id",
+          "code",
+          "message",
+          "error"
+        ],
+        "title": "ErroCircuito"
       },
       "Fonte": {
         "properties": {
@@ -1976,6 +2198,59 @@
           "circuito_otimizado_qasm": {
             "type": "string",
             "title": "Circuito Otimizado Qasm"
+          },
+          "formato_detectado": {
+            "type": "string",
+            "enum": [
+              "qasm",
+              "python"
+            ],
+            "title": "Formato Detectado"
+          },
+          "formato_saida": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "qasm"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Formato Saida"
+          },
+          "entrada_sha256": {
+            "type": "string",
+            "title": "Entrada Sha256"
+          },
+          "tempo_processamento_segundos": {
+            "type": "number",
+            "title": "Tempo Processamento Segundos"
+          },
+          "nivel_otimizacao": {
+            "type": "integer",
+            "title": "Nivel Otimizacao"
+          },
+          "passes_executados": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Passes Executados"
+          },
+          "otimizacoes_aplicadas": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Otimizacoes Aplicadas"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
           }
         },
         "additionalProperties": false,
@@ -1990,7 +2265,15 @@
           "diferenca_profundidade",
           "reduziu_operacoes",
           "reduziu_profundidade",
-          "circuito_otimizado_qasm"
+          "circuito_otimizado_qasm",
+          "formato_detectado",
+          "formato_saida",
+          "entrada_sha256",
+          "tempo_processamento_segundos",
+          "nivel_otimizacao",
+          "passes_executados",
+          "otimizacoes_aplicadas",
+          "warnings"
         ],
         "title": "ResultadoQiskit"
       },

@@ -15,6 +15,8 @@ import ChatReply, { suggestedCode } from "./ResultsView";
 import {
   createConversation,
   optimizeCircuit,
+  getCircuitLimits,
+  circuitContext,
   sendTurn,
   AnalysisError,
   type AnalysisResponse,
@@ -117,15 +119,14 @@ export default function AnalysisForm() {
     const input = (custom ?? question).trim();
     if (
       (!input && (thread || !code.trim())) ||
-      code.length > 10000 ||
-      input.length + code.length > 29000
+      input.length > 18000
     ) {
       setShowInputErrors(true);
       setFeedback({
         type: "error",
         message:
-          input.length + code.length > 29000 || code.length > 10000
-            ? "A entrada excede o limite de tamanho."
+          input.length > 18000
+            ? "A pergunta excede 18.000 caracteres. O circuito tem limites próprios."
             : "Escreva uma pergunta ou inicie uma análise com um circuito.",
       });
       return;
@@ -135,7 +136,7 @@ export default function AnalysisForm() {
     setFeedback(null);
     setHistory(null);
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 120000);
+    let timeout = setTimeout(() => controller.abort(), 15000);
     const local = thread?.id ?? pending.current?.local ?? crypto.randomUUID();
     const key = JSON.stringify([local, input, code, format, topK, webSearch]);
     if (pending.current?.key !== key) {
@@ -147,28 +148,22 @@ export default function AnalysisForm() {
       };
     }
     const request = pending.current;
-    const initial = !thread;
     const label = input || "Analise este circuito e sugira melhorias.";
     let result: AnalysisResponse | undefined;
     try {
-      if (initial && code.trim() && format === "qasm")
-        result = await optimizeCircuit(code, controller.signal);
+      if (code.trim()) {
+        const limits = await getCircuitLimits(controller.signal);
+        clearTimeout(timeout);
+        timeout = setTimeout(() => controller.abort(), limits.optimization_timeout_seconds * 1000 + 120000);
+        // The backend is authoritative; no separate hard-coded circuit cap in the editor.
+        result = await optimizeCircuit(code, controller.signal, format);
+      } else {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => controller.abort(), 120000);
+      }
       if (input || !result) {
         request.remote ??= await createConversation(controller.signal);
-        const context = code
-          ? "\n\nCódigo atual do editor (" + format + "):\n" + code
-          : "\n\nO editor está vazio.";
-        let prompt = label + context;
-        const metrics =
-          result?.quantum ||
-          (!thread?.remote && thread?.turns[0]?.result.quantum);
-        if (metrics)
-          prompt +=
-            "\nMétricas da análise anterior: " +
-            JSON.stringify({
-              original: metrics.original,
-              proposta: metrics.proposta,
-            });
+        const prompt = label + circuitContext(code, format, result?.quantum);
         const response = await sendTurn(
           request.remote,
           prompt,
@@ -176,7 +171,8 @@ export default function AnalysisForm() {
           { top_k: Number(topK), web_search: webSearch },
           controller.signal,
         );
-        result = { ...response, quantum: result?.quantum };
+        result = { ...response, quantum: result?.quantum,
+          warnings: [...(result?.warnings || []), ...response.warnings] };
       }
     } catch (e) {
       const message = controller.signal.aborted
@@ -233,9 +229,12 @@ export default function AnalysisForm() {
     const replacement = suggestedCode(turn.result, format);
     if (!replacement || replacement === code) return;
     setCode(replacement);
+    const replacementFormat = turn.result.quantum?.formato_saida || format;
+    setChosenFormat(replacementFormat);
     save({
       ...thread,
       code: replacement,
+      format: replacementFormat,
       turns: thread.turns.map((t) =>
         t === turn ? { ...t, applied: true } : t,
       ),

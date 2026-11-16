@@ -67,14 +67,19 @@ def test_qiskit_http_real(contexto):
     assert d["proposta"]["total_operacoes"] == 0
 
 @pytest.mark.parametrize("body", [{"qasm":"invalido"}, {"qasm":QASM,"optimization_level":True},
-    {"qasm":QASM,"optimization_level":4}, {"qasm":'OPENQASM 2.0; include "/etc/passwd";'},
-    {"qasm":"OPENQASM 2.0; qreg q[33];"}])
+    {"qasm":QASM,"optimization_level":4}, {"qasm":'OPENQASM 2.0; include "/etc/passwd";'}])
 def test_qiskit_entrada_invalida(contexto, body):
     client, _ = contexto
     r = client.post("/qiskit/optimize", json=body)
     assert r.status_code == 422
     if r.json()["code"] == "HTTP_ERROR":
         assert "OpenQASM 2" in r.json()["message"]
+
+def test_qiskit_limite_qubits(contexto):
+    client, _ = contexto
+    r = client.post("/qiskit/optimize", json={"qasm": "OPENQASM 2.0; qreg q[33];"})
+    assert r.status_code == 413
+    assert r.json()["error"]["code"] == "CIRCUIT_LIMIT_EXCEEDED"
 
 def test_qiskit_timeout(contexto, monkeypatch):
     client, _ = contexto

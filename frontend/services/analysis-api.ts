@@ -17,12 +17,37 @@ export type Source = {
   retrieved_at?: string;
 };
 export type QuantumResult = {
-  original: { profundidade: number; total_operacoes: number };
-  proposta: { profundidade: number; total_operacoes: number };
+  original: { qubits: number; profundidade: number; total_operacoes: number };
+  proposta: { qubits: number; profundidade: number; total_operacoes: number };
   equivalente: boolean | null;
   motivo: string | null;
   circuito_otimizado_qasm: string;
+  formato_saida: "qasm" | null;
+  formato_detectado: CodeFormat;
+  tempo_processamento_segundos: number;
+  warnings: string[];
 };
+export type CircuitLimits = {
+  max_circuit_lines: number;
+  max_code_size_bytes: number;
+  optimization_timeout_seconds: number;
+};
+export async function getCircuitLimits(signal: AbortSignal): Promise<CircuitLimits> {
+  const response = await fetch("/api/qiskit/limits", { signal, cache: "no-store" });
+  if (!response.ok) throw new AnalysisError("Não foi possível consultar os limites do otimizador.", response.status);
+  return response.json();
+}
+
+export function circuitContext(code: string, format: CodeFormat, metrics?: QuantumResult) {
+  if (!code) return "\n\nO editor está vazio.";
+  const excerpt = code.length <= 8000 ? code : code.slice(0, 4000) +
+    "\n[Trecho central omitido; a análise Qiskit usou o circuito completo.]\n" + code.slice(-4000);
+  return "\n\nCódigo atual (" + format + "):\n" + excerpt +
+    (metrics ? "\nMétricas calculadas pelo Qiskit: " + JSON.stringify({
+      original: { qubits: metrics.original.qubits, operacoes: metrics.original.total_operacoes, profundidade: metrics.original.profundidade },
+      proposta: { operacoes: metrics.proposta.total_operacoes, profundidade: metrics.proposta.profundidade },
+    }) : "");
+}
 export type AnalysisResponse = {
   conversation_id?: string;
   request_id: string;
@@ -57,7 +82,9 @@ async function post<T>(
   const data = await res.json().catch(() => null);
   if (!res.ok)
     throw new AnalysisError(
-      data?.message || "Serviço indisponível.",
+      (data?.error?.message || data?.message || "Serviço indisponível.") +
+        (data?.error?.details?.line ? ` Linha ${data.error.details.line}.` : "") +
+        (data?.error?.details?.reason ? ` ${data.error.details.reason}` : ""),
       res.status,
       data?.request_id,
     );
@@ -93,17 +120,18 @@ export async function sendTurn(
 export async function optimizeCircuit(
   code: string,
   signal: AbortSignal,
+  format: CodeFormat = "qasm",
 ): Promise<AnalysisResponse> {
   const { data, id } = await post<QuantumResult>(
     "/qiskit/optimize",
-    { qasm: code, optimization_level: 3 },
+    { code, format, optimization_level: 3 },
     signal,
   );
   return {
     request_id: id,
     status: "ok",
     sources: [],
-    warnings: [],
+    warnings: data.warnings || [],
     quantum: data,
     answer: "O Qiskit calculou as métricas e gerou a proposta abaixo.",
   };

@@ -1,4 +1,7 @@
 import unittest
+import os
+from unittest.mock import patch
+from quantum.errors import CircuitError
 
 import json
 
@@ -28,8 +31,10 @@ class TestQiskitService(unittest.TestCase):
         with self.assertRaises(ValueError):
             carregar_circuito_qasm("texto invalido")
 
-        with self.assertRaises(ValueError):
-            carregar_circuito_qasm("X" * 10001)
+        with patch.dict(os.environ, {"MAX_CODE_SIZE_BYTES": "10"}):
+            with self.assertRaises(CircuitError) as failure:
+                carregar_circuito_qasm(texto)
+            self.assertEqual(failure.exception.details["resource"], "code_size_bytes")
 
         qasm_muitos_qubits = (
             "OPENQASM 2.0;\n"
@@ -46,8 +51,11 @@ class TestQiskitService(unittest.TestCase):
             + "x q[0];\n" * 501
         )
 
-        with self.assertRaisesRegex(ValueError, "operações"):
-            carregar_circuito_qasm(qasm_muitas_operacoes)
+        self.assertEqual(carregar_circuito_qasm(qasm_muitas_operacoes).size(), 501)
+        with patch.dict(os.environ, {"MAX_CIRCUIT_GATES": "500"}):
+            with self.assertRaises(CircuitError) as failure:
+                carregar_circuito_qasm(qasm_muitas_operacoes)
+            self.assertEqual(failure.exception.details["resource"], "circuit_gates")
 
 
     def test_processar_circuito_qasm(self):

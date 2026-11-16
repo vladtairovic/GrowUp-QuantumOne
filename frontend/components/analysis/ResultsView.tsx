@@ -41,6 +41,8 @@ export default function ChatReply({ result }: { result: AnalysisResponse }) {
         <details open>
           <summary>Métricas Qiskit e circuito otimizado</summary>
           <p>
+            Qubits: {q.original.qubits}. Tempo: {q.tempo_processamento_segundos?.toFixed(2)} s.
+            <br />
             Profundidade: {q.original.profundidade} → {q.proposta.profundidade}
             <br />
             Operações: {q.original.total_operacoes} →{" "}
@@ -58,6 +60,7 @@ export default function ChatReply({ result }: { result: AnalysisResponse }) {
           <pre>
             <code>{q.circuito_otimizado_qasm}</code>
           </pre>
+          {q.circuito_otimizado_qasm && <small>Saída em OpenQASM 2. Ao aplicar, o formato do editor será atualizado.</small>}
         </details>
       )}
       {result.warnings.map((w, i) => (
@@ -114,7 +117,7 @@ export default function ChatReply({ result }: { result: AnalysisResponse }) {
         Copiar resultado
       </button>
       <small role="status">{notice}</small>
-      <SourceDrawer source={source} onClose={() => select(null)} />
+      <SourceDrawer key={source?.id || "closed"} source={source} onClose={() => select(null)} />
     </div>
   );
 }

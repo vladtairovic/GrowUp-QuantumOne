@@ -2,7 +2,11 @@ name: growup-integrada
 
 services:
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        OPTIMIZATION_TIMEOUT_SECONDS: ${OPTIMIZATION_TIMEOUT_SECONDS:-60}
+        API_TIMEOUT_SECONDS: ${API_TIMEOUT_SECONDS:-60}
     restart: unless-stopped
     ports:
       - "127.0.0.1:${FRONTEND_PORT:-3000}:3000"
@@ -39,6 +43,11 @@ services:
       context: .
       target: runtime
     restart: unless-stopped
+    mem_limit: ${API_MEMORY_LIMIT:-2g}
+    cpus: ${API_CPU_LIMIT:-2}
+    pids_limit: 128
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
     depends_on:
       cache:
         condition: service_healthy
@@ -67,7 +76,18 @@ services:
       GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.1-flash-lite}
       GEMINI_TIMEOUT_SECONDS: ${GEMINI_TIMEOUT_SECONDS:-40}
       GROWUP_MAX_CONTEXT_CHARS: ${GROWUP_MAX_CONTEXT_CHARS:-12000}
-      QISKIT_TIMEOUT_SECONDS: ${QISKIT_TIMEOUT_SECONDS:-30}
+      MAX_CIRCUIT_LINES: ${MAX_CIRCUIT_LINES:-2500}
+      MAX_QUBITS: ${MAX_QUBITS:-32}
+      MAX_CLASSICAL_BITS: ${MAX_CLASSICAL_BITS:-256}
+      MAX_CIRCUIT_GATES: ${MAX_CIRCUIT_GATES:-10000}
+      MAX_CIRCUIT_DEPTH: ${MAX_CIRCUIT_DEPTH:-10000}
+      MAX_CODE_SIZE_BYTES: ${MAX_CODE_SIZE_BYTES:-524288}
+      OPTIMIZATION_TIMEOUT_SECONDS: ${OPTIMIZATION_TIMEOUT_SECONDS:-60}
+      MAX_CONCURRENT_OPTIMIZATIONS: ${MAX_CONCURRENT_OPTIMIZATIONS:-1}
+      QISKIT_WORKER_MEMORY_MB: ${QISKIT_WORKER_MEMORY_MB:-1536}
+      MAX_PYTHON_STEPS: ${MAX_PYTHON_STEPS:-200000}
+      MAX_EQUIVALENCE_QUBITS: ${MAX_EQUIVALENCE_QUBITS:-8}
+      MAX_EQUIVALENCE_OPERATIONS: ${MAX_EQUIVALENCE_OPERATIONS:-1000}
       RAG_MAX_DISTANCE: ${RAG_MAX_DISTANCE:-}
       AVALIACOES_PATH: /app/data/avaliacoes.jsonl
     ports:

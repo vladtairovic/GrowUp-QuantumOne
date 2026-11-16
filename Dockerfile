@@ -34,4 +34,4 @@ ENV HF_HOME=/home/growup/.cache/huggingface \
     HF_HUB_DISABLE_TELEMETRY=1
 USER growup
 EXPOSE 8000
-CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--limit-concurrency", "64"]
