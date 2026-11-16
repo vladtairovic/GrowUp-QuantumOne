@@ -1,4 +1,4 @@
-# GrowUp — frontend, API, ChromaDB e cache
+# GrowUp — QuantumOne
 
 A versão **Beta-v1.1** amplia a análise e otimização de circuitos OpenQASM 2 e Python/Qiskit. O processamento determinístico usa Qiskit e pode ser executado apenas com o código no editor.
 
