@@ -33,9 +33,38 @@ export type CircuitLimits = {
   optimization_timeout_seconds: number;
 };
 export async function getCircuitLimits(signal: AbortSignal): Promise<CircuitLimits> {
-  const response = await fetch("/api/qiskit/limits", { signal, cache: "no-store" });
-  if (!response.ok) throw new AnalysisError("Não foi possível consultar os limites do otimizador.", response.status);
-  return response.json();
+  // Compose may restart the frontend before the API has finished loading.
+  // Retry only this read; an optimization POST must never be duplicated.
+  for (let attempt = 0; ; attempt++) {
+    signal.throwIfAborted();
+    try {
+      const response = await fetch("/api/qiskit/limits", { signal, cache: "no-store" });
+      if (!response.ok) throw new AnalysisError(
+        "O serviço de análise está indisponível ou iniciando. Aguarde e tente novamente.", response.status);
+      return await response.json();
+    } catch (error) {
+      signal.throwIfAborted();
+      const transient = error instanceof TypeError ||
+        (error instanceof AnalysisError && [500, 502, 503, 504].includes(error.status));
+      if (!transient || attempt >= 6) {
+        if (error instanceof TypeError) throw new AnalysisError(
+          "Não foi possível conectar ao serviço de análise. Verifique a conexão e tente novamente.", 503);
+        throw error;
+      }
+    }
+    await new Promise<void>((resolve, reject) => {
+      const abort = () => {
+        clearTimeout(timer);
+        reject(signal.reason);
+      };
+      const timer = setTimeout(() => {
+        signal.removeEventListener("abort", abort);
+        resolve();
+      }, Math.min(1000 * 2 ** attempt, 8000));
+      signal.addEventListener("abort", abort, { once: true });
+      if (signal.aborted) abort();
+    });
+  }
 }
 
 export function circuitContext(code: string, format: CodeFormat, metrics?: QuantumResult) {
@@ -84,7 +113,8 @@ async function post<T>(
     throw new AnalysisError(
       (data?.error?.message || data?.message || "Serviço indisponível.") +
         (data?.error?.details?.line ? ` Linha ${data.error.details.line}.` : "") +
-        (data?.error?.details?.reason ? ` ${data.error.details.reason}` : ""),
+        (data?.error?.details?.reason && data.error.details.reason !== data.error.message
+          ? ` ${data.error.details.reason}` : ""),
       res.status,
       data?.request_id,
     );

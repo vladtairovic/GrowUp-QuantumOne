@@ -36,6 +36,14 @@ class Interpreter:
         raise CircuitError("UNSUPPORTED_PYTHON", reason,
                            {"line": getattr(node, "lineno", 1), "reason": reason})
 
+    def reject_import(self, node, name):
+        if name in ("qiskit.circuit.Parameter", "qiskit.Parameter"):
+            self.reject(node, "Parameter não é suportado nesta análise: use ângulos numéricos "
+                        "no circuito enviado. Parâmetros simbólicos ainda não são aceitos.")
+        self.reject(node, f"Importação '{name}' não suportada. Envie a construção do circuito "
+                    "com QuantumCircuit, QuantumRegister, ClassicalRegister e funções de math; "
+                    "não inclua execução, simulação ou visualização.")
+
     def tick(self):
         self.steps += 1
         enforce_limit("python_steps", self.steps, self.limits.max_python_steps)
@@ -154,16 +162,18 @@ class Interpreter:
         for node in statements:
             self.tick()
             try:
-                if isinstance(node, ast.ImportFrom) and node.level == 0 and node.module in ("qiskit", "qiskit.circuit", "math"):
+                if isinstance(node, ast.ImportFrom):
+                    if node.level != 0 or node.module not in ("qiskit", "qiskit.circuit", "math"):
+                        self.reject_import(node, f"{'.' * node.level}{node.module or ''}.{node.names[0].name}")
                     allowed = MATH if node.module == "math" else CONSTRUCTORS
                     for alias in node.names:
                         if alias.name not in allowed:
-                            self.reject(node, "Importação não permitida.")
+                            self.reject_import(node, f"{node.module}.{alias.name}")
                         self.names[alias.asname or alias.name] = allowed[alias.name]
                 elif isinstance(node, ast.Import):
                     for alias in node.names:
                         if alias.name not in ("math", "qiskit"):
-                            self.reject(node, "Importação não permitida.")
+                            self.reject_import(node, alias.name)
                         self.names[alias.asname or alias.name] = alias.name
                 elif isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
                     self.names[node.targets[0].id] = self.expression(node.value)

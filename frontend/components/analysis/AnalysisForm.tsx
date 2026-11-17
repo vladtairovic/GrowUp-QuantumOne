@@ -136,7 +136,7 @@ export default function AnalysisForm() {
     setFeedback(null);
     setHistory(null);
     const controller = new AbortController();
-    let timeout = setTimeout(() => controller.abort(), 15000);
+    let timeout = setTimeout(() => controller.abort(), 45000);
     const local = thread?.id ?? pending.current?.local ?? crypto.randomUUID();
     const key = JSON.stringify([local, input, code, format, topK, webSearch]);
     if (pending.current?.key !== key) {

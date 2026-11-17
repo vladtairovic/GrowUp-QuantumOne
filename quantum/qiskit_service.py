@@ -103,6 +103,12 @@ def carregar_circuito_qasm(texto_qasm: str):
     except (qasm2.QASM2Error, RecursionError) as exc:
         reason = str(exc)[:1000]
         line = re.search(r":(\d+),(\d+):", reason)
+        invalid_index = re.search(r"index (\d+) is out-of-range for register '([^']+)' of size (\d+)", reason)
+        if invalid_index:
+            index, register, size = invalid_index.groups()
+            reason = (f"{register}[{index}] não existe: o registrador {register} tem {size} bits, "
+                      f"com índices de 0 a {int(size) - 1}. Corrija o índice ou a declaração "
+                      "conforme o circuito pretendido. O analisador parou no primeiro erro.")
         raise CircuitError("INVALID_CIRCUIT", "OpenQASM 2 inválido.",
                            {"line": int(line[1]) if line else 1, "reason": reason}) from exc
     validar_limites_circuito(circuito)

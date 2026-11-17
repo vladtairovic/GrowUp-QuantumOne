@@ -43,3 +43,56 @@ test('limits come from server without browser cache', async () => {
   };
   assert.equal((await getCircuitLimits(new AbortController().signal)).optimization_timeout_seconds,180);
 });
+
+test('limits recover after the API starts without repeating optimization', async () => {
+  let requests = 0;
+  global.fetch = async () => ++requests === 1
+    ? new Response('Internal Server Error', {status:500})
+    : new Response(JSON.stringify({optimization_timeout_seconds:60}));
+  assert.equal((await getCircuitLimits(new AbortController().signal)).optimization_timeout_seconds,60);
+  assert.equal(requests,2);
+});
+
+test('limits recover from a network failure', async () => {
+  let requests = 0;
+  global.fetch = async () => {
+    if (++requests === 1) throw new TypeError('Failed to fetch');
+    return new Response(JSON.stringify({optimization_timeout_seconds:60}));
+  };
+  assert.equal((await getCircuitLimits(new AbortController().signal)).optimization_timeout_seconds,60);
+});
+
+test('abort during limits retry stops further requests', async () => {
+  const controller = new AbortController();
+  let requests = 0;
+  global.fetch = async () => {
+    requests++;
+    setTimeout(() => controller.abort(),20);
+    return new Response('', {status:503});
+  };
+  await assert.rejects(getCircuitLimits(controller.signal), e => e.name === 'AbortError');
+  assert.equal(requests,1);
+});
+
+test('permanent limits errors are not retried', async () => {
+  let requests = 0;
+  global.fetch = async () => { requests++; return new Response('',{status:404}); };
+  await assert.rejects(getCircuitLimits(new AbortController().signal), e => e.status === 404);
+  assert.equal(requests,1);
+});
+
+test('persistent unavailability stops retrying and explains recovery', async (t) => {
+  const realTimeout = global.setTimeout;
+  t.mock.method(global, 'setTimeout', callback => realTimeout(callback,0));
+  let requests = 0;
+  global.fetch = async () => { requests++; return new Response('',{status:503}); };
+  await assert.rejects(getCircuitLimits(new AbortController().signal), e =>
+    e instanceof AnalysisError && e.status === 503 && e.message.includes('Aguarde e tente novamente'));
+  assert.equal(requests,7);
+});
+
+test('diagnostics do not repeat the same message and reason', async () => {
+  global.fetch = async () => new Response(JSON.stringify({error:{message:'Importação não permitida.',details:{line:2,reason:'Importação não permitida.'}}}),{status:422});
+  await assert.rejects(optimizeCircuit('import os',new AbortController().signal,'python'), e =>
+    e.message === 'Importação não permitida. Linha 2.');
+});
