@@ -1,5 +1,6 @@
 from time import perf_counter
 import os
+from .consulta_focada import termos_da_busca, evidencias_inversas
 from .banco import obter_colecao
 from .configuracao import criar_embeddings
 
@@ -25,7 +26,8 @@ def buscar_documentos(pergunta, quantidade=3, *, tempos=None):
         return []
 
     inicio = perf_counter()
-    vetores = criar_embeddings()([pergunta])
+    consulta, portas = termos_da_busca(pergunta)
+    vetores = criar_embeddings()([consulta])
     medidas["Gerar embedding da pergunta"] = perf_counter() - inicio
     inicio = perf_counter()
     resultado = colecao.query(
@@ -36,14 +38,16 @@ def buscar_documentos(pergunta, quantidade=3, *, tempos=None):
 
     medidas["Buscar vetores no ChromaDB"] = perf_counter() - inicio
     inicio_contexto = perf_counter()
-    documentos = []
-    secoes_recuperadas = set()
+    documentos = evidencias_inversas(colecao, portas, quantidade)
+    secoes_recuperadas = {(d["metadados"]["document_id"], d["metadados"]["secao"]) for d in documentos}
 
     for identificador, metadados, distancia in zip(
         resultado["ids"][0],
         resultado["metadatas"][0],
         resultado["distances"][0],
     ):
+        if len(documentos) >= quantidade:
+            break
         # Opcional: somente usar um corte definido com avaliação da equipe.
         # A distância l2 de vetores normalizados não é probabilidade/confiança.
         limite = os.getenv("RAG_MAX_DISTANCE", "").strip()
@@ -126,6 +130,9 @@ if __name__ == "__main__":
             print(f"\nResultado {posicao}")
             print("Seção:", documento["metadados"]["secao"])
             print("ID encontrado:", documento["id"])
-            print(f"Distância: {documento['distancia']:.4f}")
+            if "distancia" in documento:
+                print(f"Distância: {documento['distancia']:.4f}")
+            else:
+                print("Correspondência documental na seção de inversão.")
             print("Prévia:", documento["texto"][:600])
             print("Fonte:", documento["metadados"]["fonte"])

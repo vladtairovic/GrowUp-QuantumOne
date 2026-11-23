@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "quantumone-cli"
+version = "0.2.2"
+description = "Assistente de terminal do QuantumOne para projetos Qiskit"
+requires-python = ">=3.10"
+
+[project.scripts]
+qone = "cli:main"
+quantumone = "cli:main"
+
+[tool.setuptools]
+py-modules = ["cli", "qone_core", "qone_store"]
